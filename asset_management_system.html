@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ Thống Quản Lý Tài Sản Enterprise - Full React & Gemini AI & RBAC</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- React & ReactDOM (Production) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel Standalone -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a', 950: '#172554'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.4); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); }
+
+    /* Print styles for Asset Tags */
+    @media print {
+      body * { visibility: hidden !important; }
+      #printableArea, #printableArea * { visibility: visible !important; }
+      #printableArea {
+        position: fixed !important;
+        left: 50% !important;
+        top: 40px !important;
+        transform: translateX(-50%) !important;
+        width: 450px !important;
+        padding: 24px !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        border: 3px solid #000000 !important;
+        border-radius: 12px !important;
+        box-shadow: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen antialiased selection:bg-brand-500 selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback } = React;
+
+    // --- MOCK DATABASE WITH LOCALSTORAGE PERSISTENCE ---
+    const INITIAL_USERS = [
+      { username: 'admin', pass: 'admin123', name: 'Nguyễn Quản Trị', role: 'ADMIN', empId: 'ADM-001', avatar: '🛡️', title: 'Giám Đốc CNTT' },
+      { username: 'manager', pass: 'manager123', name: 'Trần Văn Quản Lý', role: 'MANAGER', empId: 'MGR-002', avatar: '💼', title: 'Trưởng Phòng Vận Hành' },
+      { username: 'emp', pass: 'emp123', name: 'Lê Thị Nhân Viên', role: 'EMPLOYEE', empId: 'EMP-003', avatar: '👤', title: 'Chuyên Viên Văn Phòng' }
+    ];
+
+    const INITIAL_ASSETS = [
+      { id: 1, code: 'TS001', name: 'Laptop MSI Cyborg 15 A12V', category: 'Thiết bị CNTT', status: 'IN_USE', condition: 'GOOD', value: 24500000, location: 'Tầng 3 - Phòng IT', assignedTo: 'Trần Quốc Bảo', notes: 'Core i7-13620H, RTX 3050, Ram 16GB' },
+      { id: 2, code: 'TS002', name: 'Màn hình Dell UltraSharp U2723QE 27"', category: 'Thiết bị CNTT', status: 'AVAILABLE', condition: 'NEW', value: 13200000, location: 'Kho Tầng 1', assignedTo: '', notes: 'Màn hình 4K IPS Đồ họa chuyên nghiệp' },
+      { id: 3, code: 'TS003', name: 'Bàn phím cơ Akko 3098B Plus', category: 'Phụ kiện', status: 'MAINTENANCE', condition: 'FAIR', value: 2100000, location: 'Phòng Kỹ thuật', assignedTo: 'Kỹ thuật viên', notes: 'Đang gửi bảo hành chập chập switch' },
+      { id: 4, code: 'TS004', name: 'Máy in Laser Canon LBP 2900', category: 'Thiết bị Văn phòng', status: 'IN_USE', condition: 'GOOD', value: 4600000, location: 'Phòng Kế Toán', assignedTo: 'Nguyễn Thị Hoa', notes: 'Máy in khổ A4 chính chủ' },
+      { id: 5, code: 'TS005', name: 'Ghế Ergonomic Herman Miller Aeron', category: 'Nội thất', status: 'IN_USE', condition: 'GOOD', value: 35000000, location: 'Phòng Giám Đốc', assignedTo: 'Nguyễn Quản Trị', notes: 'Ghế công thái học cao cấp' },
+      { id: 6, code: 'TS006', name: 'Máy chiếu Epson EB-FH52 4k', category: 'Thiết bị Văn phòng', status: 'DAMAGED', condition: 'DAMAGED', value: 18900000, location: 'Kho Tầng 1', assignedTo: '', notes: 'Hỏng bóng đèn chiếu, cần thay bóng' }
+    ];
+
+    const INITIAL_LOGS = [
+      { id: 'LOG-1001', timestamp: '2026-11-17 08:30:15', action: 'LOGIN', assetCode: 'SYSTEM', performedBy: 'Nguyễn Quản Trị (ADMIN)', details: 'Đăng nhập hệ thống thành công' },
+      { id: 'LOG-1002', timestamp: '2026-11-17 09:15:00', action: 'CREATE', assetCode: 'TS005', performedBy: 'Nguyễn Quản Trị (ADMIN)', details: 'Thêm mới tài sản Ghế Ergonomic Herman Miller Aeron' }
+    ];
+
+    const PERMISSIONS = {
+      ADMIN: ['VIEW_ASSETS', 'ADD_ASSET', 'EDIT_ASSET', 'DELETE_ASSET', 'EXPORT_DATA', 'VIEW_LOGS', 'PRINT_QR', 'MANAGE_USERS', 'AI_ANALYTICS'],
+      MANAGER: ['VIEW_ASSETS', 'ADD_ASSET', 'EDIT_ASSET', 'EXPORT_DATA', 'VIEW_LOGS', 'PRINT_QR', 'AI_ANALYTICS'],
+      EMPLOYEE: ['VIEW_ASSETS', 'PRINT_QR']
+    };
+
+    function MainApp() {
+      // Persistence State
+      const [users] = useState(INITIAL_USERS);
+      const [assets, setAssets] = useState(() => JSON.parse(localStorage.getItem('app_assets')) || INITIAL_ASSETS);
+      const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('app_logs')) || INITIAL_LOGS);
+      const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('app_session')) || null);
+
+      // UI State
+      const [currentTab, setCurrentTab] = useState('dashboard');
+      const [searchQuery, setSearchQuery] = useState('');
+      const [filterCategory, setFilterCategory] = useState('ALL');
+      const [filterStatus, setFilterStatus] = useState('ALL');
+
+      // Modals & Alerts
+      const [showAssetModal, setShowAssetModal] = useState(false);
+      const [editingAsset, setEditingAsset] = useState(null);
+      const [selectedQrAsset, setSelectedQrAsset] = useState(null);
+      const [toast, setToast] = useState(null);
+      const [showForbiddenModal, setShowForbiddenModal] = useState(false);
+      const [forbiddenMsg, setForbiddenMsg] = useState('');
+      const [deleteConfirmAsset, setDeleteConfirmAsset] = useState(null);
+
+      // Gemini AI Analytics State
+      const [aiLoading, setAiLoading] = useState(false);
+      const [aiReport, setAiReport] = useState(null);
+
+      // Sync LocalStorage
+      useEffect(() => { localStorage.setItem('app_assets', JSON.stringify(assets)); }, [assets]);
+      useEffect(() => { localStorage.setItem('app_logs', JSON.stringify(logs)); }, [logs]);
+      useEffect(() => {
+        if (currentUser) {
+          localStorage.setItem('app_session', JSON.stringify(currentUser));
+        } else {
+          localStorage.removeItem('app_session');
+        }
+      }, [currentUser]);
+
+      const showToast = (msg, type = 'info') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 3500);
+      };
+
+      const addLog = useCallback((action, assetCode, details) => {
+        if (!currentUser) return;
+        const newLog = {
+          id: 'LOG-' + Date.now(),
+          timestamp: new Date().toLocaleString('sv-SE'),
+          action,
+          assetCode,
+          performedBy: `${currentUser.name} (${currentUser.role})`,
+          details
+        };
+        setLogs(prev => [newLog, ...prev]);
+      }, [currentUser]);
+
+      const hasPermission = (perm) => {
+        if (!currentUser) return false;
+        return (PERMISSIONS[currentUser.role] || []).includes(perm);
+      };
+
+      const checkPermission = (perm, callback) => {
+        if (!hasPermission(perm)) {
+          setForbiddenMsg(`Tài khoản vai trò [${currentUser.role}] không đủ thẩm quyền thực hiện hành động: ${perm}`);
+          setShowForbiddenModal(true);
+          return false;
+        }
+        if (callback) callback();
+        return true;
+      };
+
+      // Authentication
+      const handleLogin = (e) => {
+        e.preventDefault();
+        const usernameInput = e.target.username.value.trim();
+        const passwordInput = e.target.password.value;
+
+        const foundUser = users.find(u => u.username === usernameInput && u.pass === passwordInput);
+
+        if (foundUser) {
+          const userSession = {
+            ...foundUser,
+            token: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token_${Date.now()}`
+          };
+          setCurrentUser(userSession);
+          showToast(`Chào mừng ${foundUser.name} (${foundUser.role}) quay trở lại!`, 'success');
+          
+          // Log Activity
+          const newLog = {
+            id: 'LOG-' + Date.now(),
+            timestamp: new Date().toLocaleString('sv-SE'),
+            action: 'LOGIN',
+            assetCode: 'SYSTEM',
+            performedBy: `${foundUser.name} (${foundUser.role})`,
+            details: `Đăng nhập hệ thống với JWT Token thành công`
+          };
+          setLogs(prev => [newLog, ...prev]);
+        } else {
+          showToast('Tên đăng nhập hoặc mật khẩu không chính xác!', 'warning');
+        }
+      };
+
+      const handleLogout = () => {
+        if (currentUser) {
+          addLog('LOGOUT', 'SYSTEM', 'Đăng xuất khỏi hệ thống');
+        }
+        setCurrentUser(null);
+        showToast('Đã đăng xuất an toàn khỏi ứng dụng.', 'info');
+      };
+
+      // Filtered Assets Computation
+      const filteredAssets = useMemo(() => {
+        return assets.filter(a => {
+          const matchSearch = (a.name + a.code + a.assignedTo + a.location + a.category).toLowerCase().includes(searchQuery.toLowerCase());
+          const matchCat = filterCategory === 'ALL' || a.category === filterCategory;
+          const matchStat = filterStatus === 'ALL' || a.status === filterStatus;
+          return matchSearch && matchCat && matchStat;
+        });
+      }, [assets, searchQuery, filterCategory, filterStatus]);
+
+      // Asset Form Handler
+      const handleSaveAsset = (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const assetObj = {
+          code: formData.get('code').trim(),
+          name: formData.get('name').trim(),
+          category: formData.get('category'),
+          value: Number(formData.get('value')) || 0,
+          status: formData.get('status'),
+          condition: formData.get('condition'),
+          assignedTo: formData.get('assignedTo').trim(),
+          location: formData.get('location').trim(),
+          notes: formData.get('notes').trim()
+        };
+
+        if (editingAsset) {
+          checkPermission('EDIT_ASSET', () => {
+            setAssets(prev => prev.map(a => a.id === editingAsset.id ? { ...a, ...assetObj } : a));
+            addLog('UPDATE', assetObj.code, `Cập nhật thông tin tài sản: ${assetObj.name}`);
+            showToast(`Cập nhật thành công tài sản ${assetObj.code}`, 'success');
+            setShowAssetModal(false);
+            setEditingAsset(null);
+          });
+        } else {
+          checkPermission('ADD_ASSET', () => {
+            if (assets.some(a => a.code === assetObj.code)) {
+              showToast(`Mã tài sản [${assetObj.code}] đã tồn tại trong hệ thống!`, 'warning');
+              return;
+            }
+            const newObj = { id: Date.now(), ...assetObj };
+            setAssets(prev => [newObj, ...prev]);
+            addLog('CREATE', assetObj.code, `Khởi tạo tài sản mới: ${assetObj.name}`);
+            showToast(`Tạo mới tài sản ${assetObj.code} thành công`, 'success');
+            setShowAssetModal(false);
+          });
+        }
+      };
+
+      const confirmDeleteAsset = () => {
+        if (!deleteConfirmAsset) return;
+        checkPermission('DELETE_ASSET', () => {
+          const target = deleteConfirmAsset;
+          setAssets(prev => prev.filter(a => a.id !== target.id));
+          addLog('DELETE', target.code, `Xóa tài sản khỏi cơ sở dữ liệu: ${target.name}`);
+          showToast(`Đã xóa tài sản [${target.code}] thành công`, 'warning');
+          setDeleteConfirmAsset(null);
+        });
+      };
+
+      // Export CSV UTF-8 with BOM
+      const handleExportCSV = () => {
+        checkPermission('EXPORT_DATA', () => {
+          const headers = ['Mã TS', 'Tên Tài Sản', 'Danh Mục', 'Giá Trị (VNĐ)', 'Trạng Thái', 'Tình Trạng', 'Người Giữ', 'Vị Trí', 'Ghi Chú'];
+          const rows = assets.map(a => [
+            `"${a.code}"`,
+            `"${a.name.replace(/"/g, '""')}"`,
+            `"${a.category}"`,
+            a.value,
+            `"${a.status}"`,
+            `"${a.condition}"`,
+            `"${a.assignedTo}"`,
+            `"${a.location}"`,
+            `"${a.notes.replace(/"/g, '""')}"`
+          ]);
+
+          const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `Enterprise_Assets_Report_${new Date().toISOString().split('T')[0]}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          addLog('EXPORT', 'DATABASE', 'Xuất toàn bộ báo cáo danh mục tài sản ra file Excel CSV');
+          showToast('Đã xuất thành công báo cáo Excel CSV (UTF-8)!', 'success');
+        });
+      };
+
+      // --- REAL GEMINI AI ANALYTICS ENGINE INTEGRATION ---
+      const runGeminiAiAnalytics = async () => {
+        checkPermission('AI_ANALYTICS', async () => {
+          setAiLoading(true);
+          setAiReport(null);
+
+          const summaryText = assets.map(a => `- Mã ${a.code}: ${a.name} (Loại: ${a.category}, Giá trị: ${a.value.toLocaleString()} VND, Trạng thái: ${a.status}, Tình trạng: ${a.condition}, Vị trí: ${a.location})`).join('\n');
+
+          const userPrompt = `Dưới đây là danh sách hiện trạng ${assets.length} tài sản của doanh nghiệp:\n${summaryText}\n\nHãy phân tích và lập báo cáo chuyên sâu bằng tiếng Việt bao gồm:\n1. TỔNG QUAN VẬN HÀNH & CHỈ SỐ RỦI RO (%):\n2. DANH SÁCH THIẾT BỊ CẦN BẢO TRÌ/THAY THẾ GẤP:\n3. DỰ BÁO NGÂN SÁCH BẢO TRÌ & THAY THẾ (VNĐ):\n4. ĐỀ XUẤT CHIẾN LƯỢC TỐI ƯU HÓA VẬN HÀNH:`;
+
+          const systemPrompt = "Bạn là Chuyên gia Quản lý Tài sản Enterprise và Phân tích Rủi ro Thiết bị. Hãy đưa ra nhận định thực tế, súc tích, chuyên nghiệp và có tính ứng dụng cao cho phòng CNTT & Quản trị cơ sở vật chất.";
+
+          const apiKey = ""; // Canvas runtime auto-injects Gemini API key when empty string
+          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+          try {
+            const response = await fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+              })
+            });
+
+            const data = await response.json();
+            const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (aiText) {
+              setAiReport(aiText);
+              addLog('AI_ANALYTICS', 'GEMINI_AI', 'Thực hiện phân tích AI rủi ro tài sản với Gemini-3-Flash');
+              showToast('Đã cập nhật báo cáo phân tích AI Gemini thành công!', 'success');
+            } else {
+              throw new Error('Không nhận được nội dung từ Gemini API');
+            }
+          } catch (err) {
+            console.warn('Gemini API fetch error fallback:', err);
+            // Fallback Heuristic Generator if API call fails
+            const totalVal = assets.reduce((s, a) => s + a.value, 0);
+            const maintenanceCount = assets.filter(a => a.status === 'MAINTENANCE' || a.condition === 'DAMAGED').length;
+            const riskRatio = Math.round((maintenanceCount / Math.max(assets.length, 1)) * 100);
+
+            const fallbackReport = `### 🤖 BÁO CÁO PHÂN TÍCH QUẢN LÝ TÀI SẢN (DỰ PHÒNG THÔNG MINH)
+
+1. TỔNG QUAN VẬN HÀNH & CHỈ SỐ RỦI RO:
+- Chỉ số rủi ro hỏng hóc hiện tại: **${riskRatio}%** (${maintenanceCount}/${assets.length} thiết bị có vấn đề).
+- Tổng định giá tài sản doanh nghiệp: **${totalVal.toLocaleString('vi-VN')} ₫**.
+- Trạng thái tổng thể: ${riskRatio > 30 ? '🔴 Cảnh báo mức độ rủi ro cao!' : '🟢 Hệ thống hoạt động tương đối ổn định.'}
+
+2. THIẾT BỊ CẦN CHÚ Ý NGHÊM NGẶT:
+${assets.filter(a => a.status === 'MAINTENANCE' || a.condition === 'DAMAGED').map(a => `- **${a.code} - ${a.name}**: Tình trạng [${a.condition}], tại vị trí [${a.location}].`).join('\n') || '- Tất cả thiết bị hiện đều ở trạng thái hoạt động tốt.'}
+
+3. DỰ BÁO NGÂN SÁCH BẢO TRÌ KỲ TỚI:
+- Dự trù kinh phí sửa chữa & bảo dưỡng: **${(totalVal * 0.05).toLocaleString('vi-VN')} ₫** (khoảng 5% giá trị tài sản).
+- Dự phòng thay mới tài sản hỏng: **${(totalVal * 0.08).toLocaleString('vi-VN')} ₫**.
+
+4. ĐỀ XUẤT TỐI ƯU HÓA:
+- Tiến hành nghiệm thu và lập biên bản thay thế cho thiết bị hư hỏng nặng.
+- Thực hiện dán mã tem QR Tag cho 100% tài sản trong kho để kiểm kê chính xác.`;
+            setAiReport(fallbackReport);
+            showToast('Hiển thị báo cáo phân tích heuristic dự phòng!', 'info');
+          } finally {
+            setAiLoading(false);
+          }
+        });
+      };
+
+      // ----------------------------------------------------
+      // RENDER 1: LOGIN VIEW IF NOT AUTHENTICATED
+      // ----------------------------------------------------
+      if (!currentUser) {
+        return (
+          <div class="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden">
+            {/* Background glowing gradients */}
+            <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-3xl p-8 shadow-2xl backdrop-blur-xl z-10 space-y-6">
+              <div class="text-center space-y-2">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white flex items-center justify-center text-2xl mx-auto shadow-lg shadow-brand-500/30">
+                  <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <h2 class="text-2xl font-black text-white tracking-tight">AssetPro Enterprise</h2>
+                <p class="text-xs text-slate-400 font-medium">Hệ Thống Quản Lý Tài Sản & Phân Tích Gemini AI</p>
+              </div>
+
+              {/* Toast Alert in Login */}
+              {toast && (
+                <div class={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 ${toast.type === 'warning' ? 'bg-amber-950/80 border border-amber-800 text-amber-300' : 'bg-brand-950/80 border border-brand-800 text-brand-300'}`}>
+                  <i class="fa-solid fa-triangle-exclamation text-base"></i> {toast.msg}
+                </div>
+              )}
+
+              <form onSubmit={handleLogin} class="space-y-4">
+                <div>
+                  <label class="block text-xs font-bold text-slate-300 uppercase mb-1">Tên Đăng Nhập</label>
+                  <div class="relative">
+                    <i class="fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                    <input name="username" defaultValue="admin" required placeholder="admin / manager / emp" class="w-full pl-9 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-sm font-medium focus:outline-none focus:border-brand-500 text-white transition-all" />
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-300 uppercase mb-1">Mật Khẩu</label>
+                  <div class="relative">
+                    <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                    <input name="password" type="password" defaultValue="admin123" required placeholder="••••••••" class="w-full pl-9 pr-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-sm font-medium focus:outline-none focus:border-brand-500 text-white transition-all" />
+                  </div>
+                </div>
+
+                <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-brand-600/30 transition-all flex items-center justify-center gap-2">
+                  <i class="fa-solid fa-right-to-bracket"></i> Đăng Nhập Hệ Thống
+                </button>
+              </form>
+
+              {/* Quick Login Helper */}
+              <div class="pt-4 border-t border-slate-800 space-y-2">
+                <span class="text-[11px] font-bold text-slate-400 block text-center uppercase tracking-wider">Chọn Nhanh Tài Khoản Demo (RBAC)</span>
+                <div class="grid grid-cols-3 gap-2 text-xs">
+                  {users.map(u => (
+                    <button key={u.username} onClick={() => {
+                      setCurrentUser({ ...u, token: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token_${Date.now()}` });
+                      showToast(`Đăng nhập thành công vai trò ${u.role}`, 'success');
+                    }} class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 text-center flex flex-col items-center gap-1 transition-all">
+                      <span class="text-base">{u.avatar}</span>
+                      <span class="text-[10px] font-extrabold uppercase text-brand-400">{u.role}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ----------------------------------------------------
+      // RENDER 2: AUTHENTICATED DASHBOARD & WORKSPACE
+      // ----------------------------------------------------
+      return (
+        <div class="flex h-screen overflow-hidden bg-slate-900 text-slate-100">
+          {/* TOAST NOTIFICATION FLOATING */}
+          {toast && (
+            <div class={`fixed top-5 right-5 z-50 px-5 py-3.5 rounded-2xl text-white font-bold text-xs shadow-2xl transition-all border flex items-center gap-3 backdrop-blur-md animate-bounce ${toast.type === 'success' ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200' : toast.type === 'warning' ? 'bg-amber-950/90 border-amber-500 text-amber-200' : 'bg-brand-950/90 border-brand-500 text-brand-200'}`}>
+              <i class={`fa-solid ${toast.type === 'success' ? 'fa-circle-check' : toast.type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-info'} text-lg`}></i>
+              {toast.msg}
+            </div>
+          )}
+
+          {/* 403 FORBIDDEN MODAL */}
+          {showForbiddenModal && (
+            <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+              <div class="bg-slate-900 border border-rose-500/50 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+                <div class="w-16 h-16 rounded-2xl bg-rose-950/80 border border-rose-500/30 text-rose-500 flex items-center justify-center text-3xl mx-auto shadow-lg shadow-rose-900/50">
+                  <i class="fa-solid fa-shield-xmark"></i>
+                </div>
+                <div>
+                  <h3 class="text-xl font-black text-white">403 Forbidden Access</h3>
+                  <p class="text-xs text-rose-400 font-mono mt-1 font-bold">LỖI PHÂN QUYỀN VAI TRÒ (RBAC)</p>
+                </div>
+                <p class="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800 leading-relaxed font-medium">{forbiddenMsg}</p>
+                <button onClick={() => setShowForbiddenModal(false)} class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition-all">
+                  Đã Hiểu & Quay Lai
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* DELETE CONFIRMATION MODAL */}
+          {deleteConfirmAsset && (
+            <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+              <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+                <div class="flex items-center gap-3 text-rose-400">
+                  <div class="w-10 h-10 rounded-xl bg-rose-950 flex items-center justify-center text-lg font-bold"><i class="fa-solid fa-trash-can"></i></div>
+                  <h3 class="text-lg font-extrabold text-white">Xác Nhận Xóa Tài Sản</h3>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                  Bạn có chắc chắn muốn xóa tài sản <strong class="text-brand-400 font-mono">[{deleteConfirmAsset.code}] {deleteConfirmAsset.name}</strong> không? Hành động này sẽ được ghi vào Security Audit Log.
+                </p>
+                <div class="flex justify-end gap-3 pt-2">
+                  <button onClick={() => setDeleteConfirmAsset(null)} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl">Hủy Bỏ</button>
+                  <button onClick={confirmDeleteAsset} class="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30">Xóa Ngay</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SIDEBAR NAVIGATION */}
+          <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col justify-between shrink-0 select-none">
+            <div>
+              <div class="h-20 flex items-center px-6 gap-3 border-b border-slate-800">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white text-xl font-extrabold shadow-lg shadow-brand-600/30">
+                  <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <div>
+                  <h1 class="font-black text-base text-white tracking-tight">AssetPro</h1>
+                  <p class="text-[10px] text-brand-400 font-mono font-extrabold uppercase">RBAC & AI ENTERPRISE</p>
+                </div>
+              </div>
+
+              <nav class="p-4 space-y-1.5">
+                {[
+                  { id: 'dashboard', label: 'Tổng Quan & AI Insights', icon: 'fa-chart-pie' },
+                  { id: 'assets', label: 'Danh Sách Tài Sản', icon: 'fa-box-archive', count: assets.length },
+                  { id: 'logs', label: 'Security Audit Logs', icon: 'fa-shield-halved' },
+                  { id: 'tags', label: 'In Tem QR Tag', icon: 'fa-qrcode' },
+                  { id: 'specs', label: 'Cấu Trúc Backend & Docker', icon: 'fa-network-wired' },
+                  { id: 'users', label: 'Tài Khoản & Quyền RBAC', icon: 'fa-users-gear', count: users.length }
+                ].map(item => (
+                  <button key={item.id} onClick={() => setCurrentTab(item.id)} class={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${currentTab === item.id ? 'bg-gradient-to-r from-brand-600 to-indigo-600 text-white shadow-lg shadow-brand-600/30' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}>
+                    <i class={`fa-solid ${item.icon} w-5 text-center text-sm`}></i>
+                    <span class="flex-1 text-left truncate">{item.label}</span>
+                    {item.count !== undefined && <span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full text-[10px] font-mono">{item.count}</span>}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* CURRENT USER PROFILE CARD */}
+            <div class="p-4 border-t border-slate-800 bg-slate-900/50 space-y-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 text-white flex items-center justify-center text-lg shadow">
+                  {currentUser.avatar}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-xs font-bold text-white truncate">{currentUser.name}</p>
+                  <div class="flex items-center gap-1.5">
+                    <span class={`text-[9px] font-black px-1.5 py-0.2 rounded uppercase ${currentUser.role === 'ADMIN' ? 'bg-purple-950 text-purple-400 border border-purple-800' : currentUser.role === 'MANAGER' ? 'bg-blue-950 text-blue-400 border border-blue-800' : 'bg-slate-800 text-slate-300'}`}>{currentUser.role}</span>
+                    <span class="text-[10px] font-mono text-slate-400 truncate">{currentUser.empId}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex gap-2 pt-1">
+                <button onClick={handleLogout} class="w-full py-2 bg-slate-800 hover:bg-rose-950/60 hover:text-rose-400 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2">
+                  <i class="fa-solid fa-power-off text-xs"></i> Đăng Xuất
+                </button>
+              </div>
+            </div>
+          </aside>
+
+          {/* MAIN WORKSPACE AREA */}
+          <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            {/* TOP BAR */}
+            <header class="h-20 border-b border-slate-800 px-8 flex items-center justify-between shrink-0 bg-slate-950/40 backdrop-blur-md">
+              <div class="relative w-80">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm mã TS, tên tài sản, vị trí..." class="w-full pl-9 pr-4 py-2.5 text-xs bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-brand-500 font-medium text-white placeholder-slate-500" />
+              </div>
+
+              <div class="flex items-center gap-3">
+                <button onClick={handleExportCSV} class="px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all">
+                  <i class="fa-solid fa-file-excel text-sm"></i> Xuất CSV Excel
+                </button>
+                <button onClick={() => { setEditingAsset(null); setShowAssetModal(true); }} class="px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-brand-600/30 transition-all">
+                  <i class="fa-solid fa-plus text-sm"></i> Thêm Tài Sản
+                </button>
+              </div>
+            </header>
+
+            {/* TAB CONTENTS CONTAINER */}
+            <div class="flex-1 overflow-y-auto p-8 space-y-6">
+
+              {/* TAB 1: DASHBOARD & GEMINI AI ANALYTICS */}
+              {currentTab === 'dashboard' && (
+                <div class="space-y-6">
+                  {/* GEMINI AI ANALYTICS BOARD */}
+                  <div class="p-6 rounded-3xl bg-gradient-to-r from-indigo-950/90 via-slate-900 to-slate-950 border border-indigo-500/30 shadow-2xl relative overflow-hidden space-y-4">
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-2 text-indigo-400 font-black text-xs uppercase tracking-widest">
+                          <i class="fa-solid fa-wand-magic-sparkles text-sm animate-pulse"></i> Gemini AI Analytics Engine (Grounding Ready)
+                        </div>
+                        <h3 class="text-xl font-black text-white">Chẩn Đoán Rủi Ro & Dự Báo Ngân Sách Tự Động</h3>
+                        <p class="text-xs text-slate-300 max-w-2xl font-medium">Gửi toàn bộ danh mục tài sản lên mô hình Gemini 3 Flash để phân tích hiện trạng và đề xuất lịch bảo trì tối ưu.</p>
+                      </div>
+
+                      <button onClick={runGeminiAiAnalytics} disabled={aiLoading} class="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-extrabold text-xs rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center gap-2 shrink-0 transition-all">
+                        {aiLoading ? <i class="fa-solid fa-spinner animate-spin text-sm"></i> : <i class="fa-solid fa-brain text-sm"></i>}
+                        {aiLoading ? 'Gemini Đang Phân Tích...' : 'Chạy Phân Tích Gemini AI'}
+                      </button>
+                    </div>
+
+                    {/* AI REPORT BOX RENDER */}
+                    {aiReport && (
+                      <div class="mt-4 p-5 bg-slate-950/90 rounded-2xl border border-indigo-500/30 text-xs text-slate-200 leading-relaxed font-mono whitespace-pre-line shadow-inner max-h-96 overflow-y-auto">
+                        {aiReport}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* METRIC KPI CARDS */}
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    {[
+                      { label: 'Tổng Số Thiết Bị', val: assets.length, icon: 'fa-cubes', color: 'text-blue-400', bg: 'bg-blue-950/40 border-blue-900/40' },
+                      { label: 'Đang Sử Dụng', val: assets.filter(a => a.status === 'IN_USE').length, icon: 'fa-user-check', color: 'text-indigo-400', bg: 'bg-indigo-950/40 border-indigo-900/40' },
+                      { label: 'Sẵn Có Trong Kho', val: assets.filter(a => a.status === 'AVAILABLE').length, icon: 'fa-box-open', color: 'text-emerald-400', bg: 'bg-emerald-950/40 border-emerald-900/40' },
+                      { label: 'Tổng Định Giá TS', val: assets.reduce((s,a) => s + (a.value||0), 0).toLocaleString('vi-VN') + ' ₫', icon: 'fa-sack-dollar', color: 'text-purple-400', bg: 'bg-purple-950/40 border-purple-900/40' }
+                    ].map((kpi, idx) => (
+                      <div key={idx} class={`p-5 rounded-2xl border ${kpi.bg} shadow-sm space-y-3`}>
+                        <div class="flex items-center justify-between text-slate-400 text-xs font-extrabold uppercase tracking-wider">
+                          <span>{kpi.label}</span>
+                          <i class={`fa-solid ${kpi.icon} text-base ${kpi.color}`}></i>
+                        </div>
+                        <p class="text-2xl font-black text-white">{kpi.val}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* RECENT ASSETS QUICK TABLE */}
+                  <div class="bg-slate-950 rounded-2xl border border-slate-800 p-6 space-y-4 shadow-xl">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <h3 class="font-black text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-brand-500"></i> Danh Mục Tài Sản Vừa Cập Nhật
+                      </h3>
+                      <button onClick={() => setCurrentTab('assets')} class="text-xs text-brand-400 font-bold hover:underline">Xem Tất Cả ({assets.length}) →</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-left text-xs">
+                        <thead class="text-slate-400 font-extrabold uppercase border-b border-slate-800">
+                          <tr>
+                            <th class="pb-3">Mã TS</th>
+                            <th class="pb-3">Tên Tài Sản</th>
+                            <th class="pb-3">Danh Mục</th>
+                            <th class="pb-3">Giá Trị</th>
+                            <th class="pb-3">Trạng Thái</th>
+                            <th class="pb-3">Người Giữ</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800 font-medium">
+                          {assets.slice(0, 5).map(a => (
+                            <tr key={a.id} class="hover:bg-slate-900/50">
+                              <td class="py-3 font-mono font-extrabold text-brand-400">{a.code}</td>
+                              <td class="py-3 font-bold text-white">{a.name}</td>
+                              <td class="py-3 text-slate-300">{a.category}</td>
+                              <td class="py-3 font-mono text-emerald-400 font-bold">{a.value.toLocaleString('vi-VN')} ₫</td>
+                              <td class="py-3">
+                                <span class={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${a.status === 'IN_USE' ? 'bg-blue-950 text-blue-400 border border-blue-800' : a.status === 'AVAILABLE' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}`}>{a.status}</span>
+                              </td>
+                              <td class="py-3 text-slate-300">{a.assignedTo || 'Chưa bàn giao'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: ASSET MANAGEMENT TABLE (CRUD) */}
+              {currentTab === 'assets' && (
+                <div class="space-y-4">
+                  {/* FILTERS TOOLBAR */}
+                  <div class="flex flex-col sm:flex-row gap-4 bg-slate-950 p-4 rounded-2xl border border-slate-800 items-center justify-between">
+                    <div class="flex flex-wrap gap-3 w-full sm:w-auto">
+                      <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} class="bg-slate-900 border border-slate-700 text-xs font-bold rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500">
+                        <option value="ALL">Tất cả danh mục</option>
+                        <option value="Thiết bị CNTT">Thiết bị CNTT</option>
+                        <option value="Thiết bị Văn phòng">Thiết bị Văn phòng</option>
+                        <option value="Phụ kiện">Phụ kiện</option>
+                        <option value="Nội thất">Nội thất</option>
+                      </select>
+
+                      <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} class="bg-slate-900 border border-slate-700 text-xs font-bold rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-brand-500">
+                        <option value="ALL">Tất cả trạng thái</option>
+                        <option value="AVAILABLE">🟢 Sẵn có (Kho)</option>
+                        <option value="IN_USE">🔵 Đang sử dụng</option>
+                        <option value="MAINTENANCE">🟡 Bảo trì</option>
+                        <option value="DAMAGED">🔴 Hỏng hóc</option>
+                      </select>
+                    </div>
+
+                    <span class="text-xs text-slate-400 font-bold font-mono">Hiển thị {filteredAssets.length} / {assets.length} tài sản</span>
+                  </div>
+
+                  {/* TABLE DISPLAY */}
+                  <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr class="bg-slate-900 text-slate-400 font-extrabold uppercase border-b border-slate-800">
+                            <th class="p-4">Mã TS</th>
+                            <th class="p-4">Tên Tài Sản</th>
+                            <th class="p-4">Danh Mục</th>
+                            <th class="p-4">Giá Trị</th>
+                            <th class="p-4">Trạng Thái</th>
+                            <th class="p-4">Người Giữ & Vị Trí</th>
+                            <th class="p-4 text-center">Thao Tác RBAC</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">
+                          {filteredAssets.length === 0 ? (
+                            <tr>
+                              <td colSpan="7" class="p-8 text-center text-slate-500 font-bold">Không tìm thấy tài sản nào phù hợp điều kiện lọc.</td>
+                            </tr>
+                          ) : (
+                            filteredAssets.map(item => (
+                              <tr key={item.id} class="hover:bg-slate-900/60 transition-colors">
+                                <td class="p-4 font-mono font-extrabold text-brand-400 text-sm">{item.code}</td>
+                                <td class="p-4">
+                                  <div class="font-bold text-white text-sm">{item.name}</div>
+                                  <div class="text-[10px] text-slate-400 truncate max-w-xs">{item.notes}</div>
+                                </td>
+                                <td class="p-4 text-slate-300 font-medium">{item.category}</td>
+                                <td class="p-4 font-mono font-bold text-emerald-400">{item.value.toLocaleString('vi-VN')} ₫</td>
+                                <td class="p-4">
+                                  <span class={`px-3 py-1 rounded-full text-[10px] font-black ${item.status === 'IN_USE' ? 'bg-blue-950 text-blue-400 border border-blue-800' : item.status === 'AVAILABLE' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : item.status === 'MAINTENANCE' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}`}>
+                                    {item.status}
+                                  </span>
+                                </td>
+                                <td class="p-4">
+                                  <div class="font-bold text-white">{item.assignedTo || 'Chưa bàn giao'}</div>
+                                  <div class="text-[11px] text-slate-400"><i class="fa-solid fa-location-dot text-slate-500"></i> {item.location || 'N/A'}</div>
+                                </td>
+                                <td class="p-4 text-center">
+                                  <div class="flex items-center justify-center gap-1.5">
+                                    <button onClick={() => { setSelectedQrAsset(item); setCurrentTab('tags'); }} class="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-indigo-400 border border-slate-800 transition-all" title="In QR Code Tag"><i class="fa-solid fa-qrcode"></i></button>
+                                    
+                                    {hasPermission('EDIT_ASSET') && (
+                                      <button onClick={() => { setEditingAsset(item); setShowAssetModal(true); }} class="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-800 transition-all" title="Chỉnh Sửa"><i class="fa-solid fa-pen-to-square"></i></button>
+                                    )}
+
+                                    {hasPermission('DELETE_ASSET') && (
+                                      <button onClick={() => setDeleteConfirmAsset(item)} class="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-rose-400 border border-slate-800 transition-all" title="Xóa"><i class="fa-solid fa-trash-can"></i></button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: SECURITY AUDIT LOGS */}
+              {currentTab === 'logs' && (
+                <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl space-y-4">
+                  <div class="p-5 border-b border-slate-800 flex justify-between items-center">
+                    <div>
+                      <h3 class="font-extrabold text-white text-sm">Security & System Audit Trail Logs</h3>
+                      <p class="text-xs text-slate-400">Ghi lại toàn bộ lịch sử thao tác hệ thống theo chuẩn an ninh thông tin ISO 27001.</p>
+                    </div>
+                    <span class="px-3 py-1 bg-brand-950 text-brand-400 font-mono text-xs font-bold rounded-lg border border-brand-800">{logs.length} Bản Ghi</span>
+                  </div>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs divide-y divide-slate-800">
+                      <thead class="bg-slate-900 text-slate-400 font-extrabold uppercase">
+                        <tr>
+                          <th class="p-4">Mốc Thời Gian</th>
+                          <th class="p-4">Hành Động</th>
+                          <th class="p-4">Mã Tài Sản</th>
+                          <th class="p-4">Người Thực Hiện</th>
+                          <th class="p-4">Nội Dung Chi Tiết Log</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-800 font-medium">
+                        {logs.map(log => (
+                          <tr key={log.id} class="hover:bg-slate-900/50">
+                            <td class="p-4 font-mono text-slate-400">{log.timestamp}</td>
+                            <td class="p-4">
+                              <span class={`px-2.5 py-1 rounded text-[10px] font-black uppercase ${log.action === 'CREATE' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : log.action === 'DELETE' ? 'bg-rose-950 text-rose-400 border border-rose-800' : log.action === 'LOGIN' ? 'bg-purple-950 text-purple-400 border border-purple-800' : 'bg-brand-950 text-brand-400 border border-brand-800'}`}>
+                                {log.action}
+                              </span>
+                            </td>
+                            <td class="p-4 font-mono font-bold text-brand-400">{log.assetCode}</td>
+                            <td class="p-4 font-bold text-white">{log.performedBy}</td>
+                            <td class="p-4 text-slate-300">{log.details}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: QR TAG PRINTING GENERATOR */}
+              {currentTab === 'tags' && (
+                <div class="space-y-6 flex flex-col items-center">
+                  <div class="flex flex-col sm:flex-row gap-4 items-center bg-slate-950 p-4 rounded-2xl border border-slate-800 w-full max-w-xl">
+                    <select value={selectedQrAsset ? selectedQrAsset.code : (assets[0] ? assets[0].code : '')} onChange={(e) => setSelectedQrAsset(assets.find(a => a.code === e.target.value))} class="w-full sm:flex-1 bg-slate-900 border border-slate-700 font-bold text-xs text-white px-4 py-2.5 rounded-xl focus:outline-none focus:border-brand-500">
+                      {assets.map(a => <option key={a.code} value={a.code}>{a.code} - {a.name}</option>)}
+                    </select>
+                    <button onClick={() => window.print()} class="w-full sm:w-auto px-6 py-2.5 bg-brand-600 hover:bg-brand-500 font-extrabold text-xs text-white rounded-xl shadow-lg shadow-brand-600/30 flex items-center justify-center gap-2">
+                      <i class="fa-solid fa-print"></i> In Tem Này
+                    </button>
+                  </div>
+
+                  {/* PRINTABLE QR CARD TAG */}
+                  {(() => {
+                    const qrItem = selectedQrAsset || assets[0] || {};
+                    const qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('MÃ TS: ' + qrItem.code + '\nTÊN: ' + qrItem.name + '\nNGƯỜI GIỮ: ' + (qrItem.assignedTo||'N/A') + '\nVỊ TRÍ: ' + (qrItem.location||'N/A'))}`;
+                    return (
+                      <div id="printableArea" class="bg-white text-slate-900 p-6 rounded-3xl border-2 border-slate-900 shadow-2xl max-w-md w-full space-y-4">
+                        <div class="flex justify-between items-center border-b-2 border-slate-900 pb-3">
+                          <div>
+                            <h4 class="font-black text-sm uppercase tracking-wider text-slate-900">ENTERPRISE ASSET TAG</h4>
+                            <p class="text-[9px] font-bold text-slate-500 font-mono">INTERNAL CONTROL SYSTEM</p>
+                          </div>
+                          <span class="font-mono text-xs font-black bg-slate-100 px-3 py-1 rounded-lg border border-slate-300 text-slate-800">{qrItem.category || 'IT'}</span>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 items-center">
+                          <div class="col-span-1 border border-slate-300 p-1.5 rounded-xl text-center bg-slate-50">
+                            <img src={qrDataUrl} alt="QR Code" class="w-full h-auto rounded-lg" />
+                            <span class="font-mono text-[10px] font-black text-slate-900 block mt-1">{qrItem.code}</span>
+                          </div>
+
+                          <div class="col-span-2 space-y-1.5">
+                            <div>
+                              <p class="text-[9px] text-slate-500 font-extrabold uppercase">Tên Thiết Bị:</p>
+                              <p class="font-black text-xs text-slate-900 leading-snug">{qrItem.name}</p>
+                            </div>
+
+                            <div>
+                              <p class="text-[9px] text-slate-500 font-extrabold uppercase">Người Giữ / Bộ Phận:</p>
+                              <p class="font-bold text-[11px] text-slate-800">{qrItem.assignedTo || 'Chưa bàn giao'}</p>
+                            </div>
+
+                            <div>
+                              <p class="text-[9px] text-slate-500 font-extrabold uppercase">Vị Trí Lưu Trữ:</p>
+                              <p class="font-bold text-[11px] text-slate-800">{qrItem.location || 'Kho Trung Tâm'}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="border-t border-slate-200 pt-2 flex justify-between items-center text-[9px] font-mono text-slate-500">
+                          <span>AssetPro System</span>
+                          <span>Bảo vệ tài sản công ty</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* TAB 5: BACKEND & DOCKER PRODUCTION ARCHITECTURE SPECIFICATION */}
+              {currentTab === 'specs' && (
+                <div class="space-y-6">
+                  <div class="bg-slate-950 p-6 rounded-3xl border border-slate-800 space-y-3">
+                    <h3 class="text-lg font-black text-white flex items-center gap-2">
+                      <i class="fa-solid fa-server text-indigo-400"></i> Cấu Trúc Backend Enterprise & Docker Deployment Spec
+                    </h3>
+                    <p class="text-xs text-slate-300 leading-relaxed font-medium">
+                      Để triển khai hệ thống này lên môi trường Production thực tế, kiến trúc được thiết kế dạng Microservices container hóa với **PostgreSQL 15**, **Django REST Framework (DRF)** cấp phát JWT Token & RBAC Middleware, cùng **React Frontend** đóng gói bằng Docker Compose.
+                    </p>
+                  </div>
+
+                  {/* CODE SNIPPETS SPEC */}
+                  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* DOCKER COMPOSE */}
+                    <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden flex flex-col">
+                      <div class="bg-slate-900 px-4 py-3 border-b border-slate-800 font-mono text-xs font-bold text-indigo-400 flex items-center justify-between">
+                        <span><i class="fa-brands fa-docker mr-2"></i> docker-compose.yml</span>
+                        <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Production Ready</span>
+                      </div>
+                      <pre class="p-4 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed flex-1">
+{`version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: assetpro_postgres
+    environment:
+      POSTGRES_DB: assetpro_db
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: secure_password_123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    container_name: assetpro_django
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgres://admin_user:secure_password_123@db:5432/assetpro_db
+      - GEMINI_API_KEY=\${GEMINI_API_KEY}
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: assetpro_react
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:`}
+                      </pre>
+                    </div>
+
+                    {/* DJANGO RBAC VIEWS */}
+                    <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden flex flex-col">
+                      <div class="bg-slate-900 px-4 py-3 border-b border-slate-800 font-mono text-xs font-bold text-brand-400 flex items-center justify-between">
+                        <span><i class="fa-brands fa-python mr-2"></i> views.py (Django REST RBAC)</span>
+                        <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">DRF Security</span>
+                      </div>
+                      <pre class="p-4 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed flex-1">
+{`from rest_framework import viewsets, permissions, status
+from rest_framework.response import Response
+from .models import Asset, AuditLog
+from .serializers import AssetSerializer
+
+class IsAdminOrManagerUser(permissions.BasePermission):
+    """Custom RBAC Permission Class"""
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True # ALL authenticated users can view
+        
+        # ADD/EDIT requires MANAGER or ADMIN
+        user_role = request.user.profile.role
+        if request.method in ['POST', 'PUT', 'PATCH']:
+            return user_role in ['ADMIN', 'MANAGER']
+            
+        # DELETE requires ADMIN only
+        if request.method == 'DELETE':
+            return user_role == 'ADMIN'
+            
+        return False
+
+class AssetViewSet(viewsets.ModelViewSet):
+    queryset = Asset.objects.all()
+    serializer_class = AssetSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrManagerUser]
+
+    def perform_destroy(self, instance):
+        AuditLog.objects.create(
+            action="DELETE",
+            asset_code=instance.code,
+            performed_by=f"{self.request.user.username} ({self.request.user.profile.role})"
+        )
+        instance.delete()`}
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* POSTGRESQL SCHEMA SPEC */}
+                  <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+                    <div class="bg-slate-900 px-4 py-3 border-b border-slate-800 font-mono text-xs font-bold text-emerald-400">
+                      <i class="fa-solid fa-database mr-2"></i> PostgreSQL Database Schema (schema.sql)
+                    </div>
+                    <pre class="p-4 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
+{`CREATE TABLE assets (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    value NUMERIC(15, 2) DEFAULT 0.00,
+    status VARCHAR(50) CHECK (status IN ('AVAILABLE', 'IN_USE', 'MAINTENANCE', 'DAMAGED')),
+    condition_state VARCHAR(50) DEFAULT 'GOOD',
+    assigned_to VARCHAR(150),
+    location VARCHAR(200),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    action VARCHAR(50) NOT NULL,
+    asset_code VARCHAR(50) NOT NULL,
+    performed_by VARCHAR(150) NOT NULL,
+    details TEXT
+);`}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 6: USER MANAGEMENT & RBAC DIRECTORY */}
+              {currentTab === 'users' && (
+                <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl p-6 space-y-4">
+                  <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                    <div>
+                      <h3 class="font-extrabold text-white text-base">Danh Sách Tài Khoản & Phân Quyền RBAC</h3>
+                      <p class="text-xs text-slate-400">Ma trận quyền hạn truy cập theo từng vai trò trong doanh nghiệp.</p>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 pb-4">
+                    <div class="p-4 rounded-xl bg-purple-950/30 border border-purple-800/40 space-y-1">
+                      <h4 class="font-extrabold text-purple-400 text-xs uppercase">ADMIN (Toàn Quyền)</h4>
+                      <p class="text-[11px] text-slate-300">Quản lý tài sản, xóa, thêm, sửa, xem audit log, xuất CSV, chạy Gemini AI, quản lý người dùng.</p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-blue-950/30 border border-blue-800/40 space-y-1">
+                      <h4 class="font-extrabold text-blue-400 text-xs uppercase">MANAGER (Quản Lý)</h4>
+                      <p class="text-[11px] text-slate-300">Thêm, sửa tài sản, xuất báo cáo CSV, chạy Gemini AI Analytics, in tem QR. Không được xóa tài sản.</p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                      <h4 class="font-extrabold text-slate-300 text-xs uppercase">EMPLOYEE (Nhân Viên)</h4>
+                      <p class="text-[11px] text-slate-400">Chỉ có quyền tra cứu thông tin tài sản và in tem mã QR Tag.</p>
+                    </div>
+                  </div>
+
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs divide-y divide-slate-800">
+                      <thead class="bg-slate-900 text-slate-400 font-extrabold uppercase">
+                        <tr>
+                          <th class="p-4">Nhân Viên</th>
+                          <th class="p-4">Mã NV</th>
+                          <th class="p-4">Chức Danh</th>
+                          <th class="p-4">Username</th>
+                          <th class="p-4">Vai Trò RBAC</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-800 font-medium">
+                        {users.map(u => (
+                          <tr key={u.username} class="hover:bg-slate-900/50">
+                            <td class="p-4 font-bold text-white flex items-center gap-3">
+                              <span class="text-xl">{u.avatar}</span> {u.name}
+                            </td>
+                            <td class="p-4 font-mono font-bold text-brand-400">{u.empId}</td>
+                            <td class="p-4 text-slate-300">{u.title}</td>
+                            <td class="p-4 text-slate-300 font-mono">{u.username}</td>
+                            <td class="p-4">
+                              <span class={`px-3 py-1 rounded-full text-[10px] font-black ${u.role === 'ADMIN' ? 'bg-purple-950 text-purple-400 border border-purple-800' : u.role === 'MANAGER' ? 'bg-blue-950 text-blue-400 border border-blue-800' : 'bg-slate-800 text-slate-300'}`}>
+                                {u.role}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </main>
+
+          {/* ASSET EDIT / ADD MODAL DIALOG */}
+          {showAssetModal && (
+            <div class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                  <h3 class="font-extrabold text-base text-white">{editingAsset ? 'Chỉnh Sửa Thông Tin Tài Sản' : 'Khai Báo Tài Sản Mới'}</h3>
+                  <button onClick={() => setShowAssetModal(false)} class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                
+                <form onSubmit={handleSaveAsset} class="space-y-4 text-xs">
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="block font-extrabold text-slate-300 uppercase mb-1">Mã Tài Sản *</label>
+                      <input name="code" required defaultValue={editingAsset ? editingAsset.code : 'TS' + Math.floor(100 + Math.random()*900)} class="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl font-mono font-bold text-white focus:outline-none focus:border-brand-500" />
+                    </div>
+                    <div>
+                      <label class="block font-extrabold text-slate-300 uppercase mb-1">Tên Tài Sản *</label>
+                      <input name="name" required defaultValue={editingAsset ? editingAsset.name : ''} placeholder="vd: Laptop Dell XPS 15" class="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl font-bold text-white focus:outline-none focus:border-brand-500" />
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="block font-extrabold text-slate-300 uppercase mb-1">Danh Mục *</label>
+                      <select name="category" defaultValue={editingAsset ? editingAsset.category : 'Thiết bị CNTT'} class="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl font-bold text-white focus:outline-none focus:border-brand-500">
+                        <option value="Thiết bị CNTT">Thiết bị CNTT</option>
+                        <option value="Thiết bị Văn phòng">Thiết bị Văn phòng</option>
+                        <option value="Phụ kiện">Phụ kiện</option>
+                        <option value="Nội thất">Nội thất</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block font-extrabold text-slate-300 uppercase mb-1">Giá Trị (VNĐ)</label>
+                      <input name="value" type="number" defaultValue={editingAsset ? editingAsset.value : 15000000} class="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl font-mono text-white focus:outline-none focus:border-brand-500" />
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="block font-extrabold text-slate-300 uppercase mb-1">Trạng Thái</label>
+                      <select name="status" defaultValue={editingAsset ? editingAsset.status : 'AVAILABLE'} class="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl font-bold text-white focus:outline-none focus:border-brand-500">
+                        <option value="AVAILABLE">🟢 Sẵn có (Kho)</option>
+                        <option value="IN_USE">🔵 Đang sử dụng</option>
+                        <option value="MAINTENANCE">🟡 Bảo trì</option>
+                        <option value="DAMAGED">🔴 Hỏng hóc</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block font-extrabold text-slate-300 uppercase mb-1">Tình Trạng Thiết Bị</label>
+                      <select name="condition" defaultValue={editingAsset ? editingAsset.condition : 'GOOD'} class="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl font-bold text-white focus:outline-none focus:border-brand-500">
+                        <option value="NEW">Mới 100%</option>
+                        <option value="GOOD">Tốt / Hoạt động ổn định</option>
+                        <option value="FAIR">Cũ / Trầy xước nhẹ</option>
+                        <option value="DAMAGED">Hỏng / Cần thay thế</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="block font-extrabold text-slate-300 uppercase mb-1">Người Giữ / Bàn Giao</label>
+                      <input name="assignedTo" defaultValue={editingAsset ? editingAsset.assignedTo : ''} placeholder="vd: Trần Quốc Bảo" class="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl text-white focus:outline-none focus:border-brand-500" />
+                    </div>
+                    <div>
+                      <label class="block font-extrabold text-slate-300 uppercase mb-1">Vị Trí Lưu Trữ</label>
+                      <input name="location" defaultValue={editingAsset ? editingAsset.location : 'Phòng IT'} placeholder="vd: Tầng 3 - Phòng IT" class="w-full bg-slate-950 border border-slate-700 px-3 py-2.5 rounded-xl text-white focus:outline-none focus:border-brand-500" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block font-extrabold text-slate-300 uppercase mb-1">Ghi Chú Cấu Hình / Tình Trạng</label>
+                    <textarea name="notes" rows="2" defaultValue={editingAsset ? editingAsset.notes : ''} placeholder="Nhập mô tả chi tiết tài sản..." class="w-full bg-slate-950 border border-slate-700 px-3 py-2 rounded-xl text-white focus:outline-none focus:border-brand-500"></textarea>
+                  </div>
+
+                  <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
+                    <button type="button" onClick={() => setShowAssetModal(false)} class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-brand-600/30">Lưu Thông Tin</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    // Render App Component into DOM Root
+    ReactDOM.createRoot(document.getElementById('root')).render(<MainApp />);
+  </script>
+</body>
+</html>
